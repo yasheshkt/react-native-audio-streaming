@@ -31,6 +31,14 @@ xcuserdata/
 *.dSYM.zip
 *.dSYM
 
+# Android/IntelliJ
+#
+build/
+.idea
+.gradle
+local.properties
+*.iml
+
 # CocoaPods
 #
 # We recommend against adding the Pods directory to your .gitignore. However
@@ -62,3 +70,5 @@ fastlane/screenshots
 # https://github.com/johnno1962/injectionforxcode
 
 iOSInjectionProject/
+gradle-wrapper.properties
+gradle-wrapper.jar
