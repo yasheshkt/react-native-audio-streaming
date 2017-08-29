@@ -9,6 +9,11 @@
             android:enabled="true"
             android:theme="@android:style/Theme.NoTitleBar"
             android:stopWithTask="true"/>
+        <service
+            android:name="com.audioStreaming.AudioPlayerService"
+            android:enabled="true"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:stopWithTask="true"/>
     </application>
 </manifest>
   

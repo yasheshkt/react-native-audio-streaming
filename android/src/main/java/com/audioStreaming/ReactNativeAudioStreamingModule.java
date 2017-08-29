@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.IBinder;
 import android.util.Log;
+
+import com.audioStreaming.AudioPlayerService;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -18,13 +20,14 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 import javax.annotation.Nullable;
 
 public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
-    implements ServiceConnection {
+        implements ServiceConnection {
 
   public static final String SHOULD_SHOW_NOTIFICATION = "showInAndroidNotifications";
   private ReactApplicationContext context;
 
   private Class<?> clsActivity;
   private static Signal signal;
+  private static AudioPlayerService audioPlayerService;
   private Intent bindIntent;
   private String streamingURL;
   private boolean shouldShowNotification;
@@ -55,7 +58,7 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
 
   public void sendEvent(ReactContext reactContext, String eventName, @Nullable WritableMap params) {
     this.context.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-        .emit(eventName, params);
+            .emit(eventName, params);
   }
 
   @Override public String getName() {
@@ -66,7 +69,8 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
     super.initialize();
 
     try {
-      bindIntent = new Intent(this.context, Signal.class);
+      bindIntent = new Intent(this.context, AudioPlayerService.class);
+      //bindIntent = new Intent(this.context, Signal.class);
       this.context.bindService(bindIntent, this, Context.BIND_AUTO_CREATE);
     } catch (Exception e) {
       Log.e("ERROR", e.getMessage());
@@ -74,8 +78,11 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   }
 
   @Override public void onServiceConnected(ComponentName className, IBinder service) {
-    signal = ((Signal.RadioBinder) service).getService();
-    signal.setData(this.context, this);
+//    signal = ((Signal.RadioBinder) service).getService();
+//    signal.setData(this.context, this);
+    audioPlayerService = ((AudioPlayerService.RadioBinder) service).getService();
+    audioPlayerService.setData(this.context, this);
+
     WritableMap params = Arguments.createMap();
     sendEvent(this.getReactApplicationContextModule(), "streamingOpen", params);
   }
@@ -85,11 +92,12 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   }
 
   @ReactMethod public void play(String streamingURL, ReadableMap options) {
-    this.streamingURL = streamingURL;
-    this.shouldShowNotification =
-        options.hasKey(SHOULD_SHOW_NOTIFICATION) && options.getBoolean(SHOULD_SHOW_NOTIFICATION);
-    signal.setURLStreaming(streamingURL); // URL of MP3 or AAC stream
-    playInternal();
+    audioPlayerService.play(streamingURL);
+//    this.streamingURL = streamingURL;
+//    this.shouldShowNotification =
+//        options.hasKey(SHOULD_SHOW_NOTIFICATION) && options.getBoolean(SHOULD_SHOW_NOTIFICATION);
+//    signal.setURLStreaming(streamingURL); // URL of MP3 or AAC stream
+//    playInternal();
   }
 
   private void playInternal() {
@@ -100,12 +108,17 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   }
 
   @ReactMethod public void stop() {
-    signal.stop();
+    //signal.stop();
+    audioPlayerService.stop();
   }
 
   @ReactMethod public void pause() {
     // Not implemented on aac
     this.stop();
+  }
+
+  @ReactMethod public void seekToTime(Double time) {
+    audioPlayerService.seekToTime(time);
   }
 
   @ReactMethod public void resume() {
