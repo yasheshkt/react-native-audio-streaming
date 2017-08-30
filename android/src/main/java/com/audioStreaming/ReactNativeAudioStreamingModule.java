@@ -48,8 +48,9 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
     return this.clsActivity;
   }
 
-  public void stopOncall() {
-    this.signal.stop();
+  public void stopOnCall() {
+    //this.signal.stop();
+    audioPlayerService.stop();
   }
 
   public Signal getSignal() {
@@ -92,18 +93,32 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   }
 
   @ReactMethod public void play(String streamingURL, ReadableMap options) {
-    audioPlayerService.play(streamingURL);
-//    this.streamingURL = streamingURL;
-//    this.shouldShowNotification =
-//        options.hasKey(SHOULD_SHOW_NOTIFICATION) && options.getBoolean(SHOULD_SHOW_NOTIFICATION);
+
+    this.streamingURL = streamingURL;
+    this.shouldShowNotification =
+        options.hasKey(SHOULD_SHOW_NOTIFICATION) && options.getBoolean(SHOULD_SHOW_NOTIFICATION);
 //    signal.setURLStreaming(streamingURL); // URL of MP3 or AAC stream
-//    playInternal();
+    audioPlayerService.setTrackURL(streamingURL);
+    playInternal();
   }
 
+  @ReactMethod public void setTrackTitle(String trackTitle) {
+    audioPlayerService.setTrackTitle(trackTitle);
+  }
+
+  @ReactMethod public void setArtist(String artist) {
+    audioPlayerService.setArtist(artist);
+  }
+
+  @ReactMethod public void setCoverImageUrl(String coverImageUrl) {
+    audioPlayerService.setCoverImageUrl(coverImageUrl);
+  }
+
+
   private void playInternal() {
-    signal.play();
+    audioPlayerService.play();
     if (shouldShowNotification) {
-      signal.showNotification();
+      audioPlayerService.showNotification();
     }
   }
 

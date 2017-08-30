@@ -330,7 +330,7 @@ public class Signal extends Service implements OnErrorListener,
         sendBroadcast(metaIntent);
 
         if (key != null && key.equals("StreamTitle") && remoteViews != null && value != null) {
-            remoteViews.setTextViewText(R.id.song_name_notification, value);
+            //remoteViews.setTextViewText(R.id.song_name_notification, value);
             notifyBuilder.setContent(remoteViews);
             notifyManager.notify(NOTIFY_ME_ID, notifyBuilder.build());
         }
