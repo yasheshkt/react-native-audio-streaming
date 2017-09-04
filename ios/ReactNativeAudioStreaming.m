@@ -8,6 +8,14 @@
 @import AVFoundation;
 @import MediaPlayer;
 
+@interface ReactNativeAudioStreaming ()
+@property (nonatomic, retain) NSString *currentTrackTitle;
+@property (nonatomic, retain) NSString *currentArtist;
+@property (nonatomic, retain) NSString *currentCoverImageUrl;
+@property (nonatomic, assign) bool isPlaying;
+@property (nonatomic, strong) UIImage *currentCoverImage;
+@end
+
 @implementation ReactNativeAudioStreaming
 
 @synthesize bridge = _bridge;
@@ -45,13 +53,14 @@ RCT_EXPORT_MODULE()
       NSNumber *progress = [NSNumber numberWithFloat:self.audioPlayer.progress];
       NSNumber *duration = [NSNumber numberWithFloat:self.audioPlayer.duration];
       NSString *url = [NSString stringWithString:self.audioPlayer.currentlyPlayingQueueItemId];
+      [self updateNowPlayingInfo];
       
       [self.bridge.eventDispatcher sendDeviceEventWithName:@"AudioBridgeEvent" body:@{
-                                                                                 @"status": @"STREAMING",
-                                                                                 @"progress": progress,
-                                                                                 @"duration": duration,
-                                                                                 @"url": url,
-                                                                                 }];
+                                                                                      @"status": @"STREAMING",
+                                                                                      @"progress": progress,
+                                                                                      @"duration": duration,
+                                                                                      @"url": url,
+                                                                                      }];
    }
 }
 
@@ -64,14 +73,14 @@ RCT_EXPORT_MODULE()
 }
 
 
-#pragma mark - Pubic API
+#pragma mark - Public API
 
 RCT_EXPORT_METHOD(play:(NSString *) streamUrl options:(NSDictionary *)options)
 {
    if (!self.audioPlayer) {
       return;
    }
-
+   
    [self activate];
    
    if (self.audioPlayer.state == STKAudioPlayerStatePaused && [self.lastUrlString isEqualToString:streamUrl]) {
@@ -79,7 +88,7 @@ RCT_EXPORT_METHOD(play:(NSString *) streamUrl options:(NSDictionary *)options)
    } else {
       [self.audioPlayer play:streamUrl];
    }
-
+   
    self.lastUrlString = streamUrl;
    self.showNowPlayingInfo = false;
    
@@ -96,7 +105,8 @@ RCT_EXPORT_METHOD(play:(NSString *) streamUrl options:(NSDictionary *)options)
       [self registerRemoteControlEvents];
    }
    
-   [self setNowPlayingInfo:true];
+   self.isPlaying = true;
+   [self updateNowPlayingInfo];
 }
 
 RCT_EXPORT_METHOD(seekToTime:(double) seconds)
@@ -104,7 +114,7 @@ RCT_EXPORT_METHOD(seekToTime:(double) seconds)
    if (!self.audioPlayer) {
       return;
    }
-
+   
    [self.audioPlayer seekToTime:seconds];
 }
 
@@ -118,7 +128,8 @@ RCT_EXPORT_METHOD(goForward:(double) seconds)
    
    if (self.audioPlayer.duration < newtime) {
       [self.audioPlayer stop];
-      [self setNowPlayingInfo:false];
+      self.isPlaying = false;
+      [self updateNowPlayingInfo];
    } else {
       [self.audioPlayer seekToTime:newtime];
    }
@@ -145,7 +156,8 @@ RCT_EXPORT_METHOD(pause)
       return;
    } else {
       [self.audioPlayer pause];
-      [self setNowPlayingInfo:false];
+      self.isPlaying = false;
+      [self updateNowPlayingInfo];
       [self deactivate];
    }
 }
@@ -157,7 +169,8 @@ RCT_EXPORT_METHOD(resume)
    } else {
       [self activate];
       [self.audioPlayer resume];
-      [self setNowPlayingInfo:true];
+      self.isPlaying = true;
+      [self updateNowPlayingInfo];
    }
 }
 
@@ -167,7 +180,8 @@ RCT_EXPORT_METHOD(stop)
       return;
    } else {
       [self.audioPlayer stop];
-      [self setNowPlayingInfo:false];
+      self.isPlaying = false;
+      [self updateNowPlayingInfo];
       [self deactivate];
    }
 }
@@ -177,7 +191,7 @@ RCT_EXPORT_METHOD(getStatus: (RCTResponseSenderBlock) callback)
    NSString *status = @"STOPPED";
    NSNumber *duration = [NSNumber numberWithFloat:self.audioPlayer.duration];
    NSNumber *progress = [NSNumber numberWithFloat:self.audioPlayer.progress];
-
+   
    if (!self.audioPlayer) {
       status = @"ERROR";
    } else if ([self.audioPlayer state] == STKAudioPlayerStatePlaying) {
@@ -189,6 +203,35 @@ RCT_EXPORT_METHOD(getStatus: (RCTResponseSenderBlock) callback)
    }
    
    callback(@[[NSNull null], @{@"status": status, @"progress": progress, @"duration": duration, @"url": self.lastUrlString}]);
+}
+
+RCT_EXPORT_METHOD(setTrackTitle:(NSString *) trackTitle)
+{
+   self.currentTrackTitle = trackTitle;
+   [self updateNowPlayingInfo];
+}
+
+RCT_EXPORT_METHOD(setArtist:(NSString *) artist)
+{
+   self.currentArtist = artist;
+   [self updateNowPlayingInfo];
+}
+
+RCT_EXPORT_METHOD(setCoverImageUrl:(NSString *) coverImageUrl)
+{
+   self.currentCoverImageUrl = coverImageUrl;
+   [self updateNowPlayingInfo];
+}
+
+- (void)setCurrentCoverImageUrl:(NSString *)currentCoverImageUrl {
+   if (currentCoverImageUrl && ![currentCoverImageUrl isEqualToString:self.currentCoverImageUrl]) {
+      self.currentCoverImage = nil;
+   }
+   
+   _currentCoverImageUrl = currentCoverImageUrl;
+   if (self.currentCoverImageUrl) {
+      [self downloadCoverImage:[NSURL URLWithString:self.currentCoverImageUrl]];
+   }
 }
 
 #pragma mark - StreamingKit Audio Player
@@ -216,13 +259,14 @@ RCT_EXPORT_METHOD(getStatus: (RCTResponseSenderBlock) callback)
 - (void)audioPlayer:(STKAudioPlayer *)audioPlayer didReadStreamMetadata:(NSDictionary *)dictionary {
    NSLog(@"AudioPlayer SONG NAME  %@", dictionary[@"StreamTitle"]);
    
-   self.currentSong = dictionary[@"StreamTitle"] ? dictionary[@"StreamTitle"] : @"";
+   NSString *trackTitleFromMetadata = dictionary[@"StreamTitle"] ? dictionary[@"StreamTitle"] : @"";
    [self.bridge.eventDispatcher sendDeviceEventWithName:@"AudioBridgeEvent" body:@{
                                                                                    @"status": @"METADATA_UPDATED",
                                                                                    @"key": @"StreamTitle",
-                                                                                   @"value": self.currentSong
+                                                                                   @"value": trackTitleFromMetadata
                                                                                    }];
-   [self setNowPlayingInfo:true];
+   self.isPlaying = true;
+   [self updateNowPlayingInfo];
 }
 
 - (void)audioPlayer:(STKAudioPlayer *)player stateChanged:(STKAudioPlayerState)state previousState:(STKAudioPlayerState)previousState
@@ -291,7 +335,7 @@ RCT_EXPORT_METHOD(getStatus: (RCTResponseSenderBlock) callback)
 {
    NSError *categoryError = nil;
    self.isPlayingWithOthers = [[AVAudioSession sharedInstance] isOtherAudioPlaying];
-
+   
    [[AVAudioSession sharedInstance] setActive:NO error:&categoryError];
    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryAmbient error:&categoryError];
    
@@ -401,13 +445,29 @@ RCT_EXPORT_METHOD(getStatus: (RCTResponseSenderBlock) callback)
 - (void)registerRemoteControlEvents
 {
    MPRemoteCommandCenter *commandCenter = [MPRemoteCommandCenter sharedCommandCenter];
-   [commandCenter.playCommand addTarget:self action:@selector(didReceivePlayCommand:)];
-   [commandCenter.pauseCommand addTarget:self action:@selector(didReceivePauseCommand:)];
-   commandCenter.playCommand.enabled = YES;
-   commandCenter.pauseCommand.enabled = YES;
-   commandCenter.stopCommand.enabled = NO;
-   commandCenter.nextTrackCommand.enabled = NO;
-   commandCenter.previousTrackCommand.enabled = NO;
+   
+   MPSkipIntervalCommand *skipBackwardIntervalCommand = [commandCenter skipBackwardCommand];
+   [skipBackwardIntervalCommand setEnabled:YES];
+   [skipBackwardIntervalCommand removeTarget:self action:@selector(didReceiveSeekBackwardCommand:)];
+   [skipBackwardIntervalCommand addTarget:self action:@selector(didReceiveSeekBackwardCommand:)];
+   skipBackwardIntervalCommand.preferredIntervals = @[@(15)];  // Set your own interval
+   
+   MPSkipIntervalCommand *skipForwardIntervalCommand = [commandCenter skipForwardCommand];
+   skipForwardIntervalCommand.preferredIntervals = @[@(15)];  // Max 99
+   [skipForwardIntervalCommand setEnabled:YES];
+   [skipForwardIntervalCommand removeTarget:self action:@selector(didReceiveSeekForwardCommand:)];
+   [skipForwardIntervalCommand addTarget:self action:@selector(didReceiveSeekForwardCommand:)];
+   
+   MPRemoteCommand *pauseCommand = [commandCenter pauseCommand];
+   [pauseCommand setEnabled:YES];
+   [pauseCommand removeTarget:self action:@selector(didReceivePauseCommand:)];
+   [pauseCommand addTarget:self action:@selector(didReceivePauseCommand:)];
+   //
+   MPRemoteCommand *playCommand = [commandCenter playCommand];
+   [playCommand setEnabled:YES];
+   [playCommand removeTarget:self action:@selector(didReceivePlayCommand:)];
+   [playCommand addTarget:self action:@selector(didReceivePlayCommand:)];
+   
 }
 
 - (MPRemoteCommandHandlerStatus)didReceivePlayCommand:(MPRemoteCommand *)event
@@ -424,6 +484,20 @@ RCT_EXPORT_METHOD(getStatus: (RCTResponseSenderBlock) callback)
    return MPRemoteCommandHandlerStatusSuccess;
 }
 
+- (MPRemoteCommandHandlerStatus)didReceiveSeekForwardCommand:(MPRemoteCommand *)event
+{
+   NSLog(@"didReceiveSeekForwardCommand");
+   [self goForward:15];
+   return MPRemoteCommandHandlerStatusSuccess;
+}
+
+- (MPRemoteCommandHandlerStatus)didReceiveSeekBackwardCommand:(MPRemoteCommand *)event
+{
+   NSLog(@"didReceiveSeekBackwardCommand");
+   [self goBack:15];
+   return MPRemoteCommandHandlerStatusSuccess;
+}
+
 - (void)unregisterRemoteControlEvents
 {
    MPRemoteCommandCenter *commandCenter = [MPRemoteCommandCenter sharedCommandCenter];
@@ -431,18 +505,33 @@ RCT_EXPORT_METHOD(getStatus: (RCTResponseSenderBlock) callback)
    [commandCenter.pauseCommand removeTarget:self];
 }
 
-- (void)setNowPlayingInfo:(bool)isPlaying
+- (void)downloadCoverImage:(NSURL *)url {
+   [[NSURLSession.sharedSession dataTaskWithURL:url completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+      if (!error) {
+         self.currentCoverImage = [UIImage imageWithData:data];
+         [self updateNowPlayingInfo];
+      }
+   }] resume];
+}
+
+- (void)updateNowPlayingInfo
 {
    if (self.showNowPlayingInfo) {
-      // TODO Get artwork from stream
-      // MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc]initWithImage:[UIImage imageNamed:@"webradio1"]];
-   
-      NSString* appName = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleName"];
-      NSDictionary *nowPlayingInfo = [NSDictionary dictionaryWithObjectsAndKeys:
-                                      self.currentSong ? self.currentSong : @"", MPMediaItemPropertyAlbumTitle,
-                                      @"", MPMediaItemPropertyAlbumArtist,
-                                      appName ? appName : @"AppName", MPMediaItemPropertyTitle,
-                                      [NSNumber numberWithFloat:isPlaying ? 1.0f : 0.0], MPNowPlayingInfoPropertyPlaybackRate, nil];
+      
+      NSNumber *progress = [NSNumber numberWithFloat:self.audioPlayer.progress];
+      NSNumber *duration = [NSNumber numberWithFloat:self.audioPlayer.duration];
+      
+      NSMutableDictionary *nowPlayingInfo = [@{MPMediaItemPropertyTitle: self.currentTrackTitle ? self.currentTrackTitle : @"",
+                                               MPMediaItemPropertyArtist: self.currentArtist ? self.currentArtist : @"",
+                                               MPNowPlayingInfoPropertyPlaybackRate: self.isPlaying ? @1.0f : @0.0,
+                                               MPMediaItemPropertyPlaybackDuration: duration,
+                                               MPNowPlayingInfoPropertyElapsedPlaybackTime: progress,
+                                               } mutableCopy];
+      if (self.currentCoverImage) {
+         MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc]initWithImage:self.currentCoverImage];
+         nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork;
+      }
+      
       [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nowPlayingInfo;
    }
 }

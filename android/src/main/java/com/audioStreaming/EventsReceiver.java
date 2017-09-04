@@ -20,6 +20,18 @@ public class EventsReceiver extends BroadcastReceiver {
         WritableMap params = Arguments.createMap();
         params.putString("status", intent.getAction());
 
+        if (intent != null && intent.getExtras() != null) {
+            Double duration = intent.getExtras().getDouble("duration", -1);
+            if (duration != -1) {
+                params.putDouble("duration", duration);
+            }
+
+            Double progress = intent.getExtras().getDouble("progress", -1);
+            if (progress != -1) {
+                params.putDouble("progress", progress);
+            }
+        }
+
         if (intent.getAction().equals(Mode.METADATA_UPDATED)) {
             params.putString("key", intent.getStringExtra("key"));
             params.putString("value", intent.getStringExtra("value"));
