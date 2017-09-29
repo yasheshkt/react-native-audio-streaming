@@ -468,6 +468,20 @@ RCT_EXPORT_METHOD(setCoverImageUrl:(NSString *) coverImageUrl)
    [playCommand removeTarget:self action:@selector(didReceivePlayCommand:)];
    [playCommand addTarget:self action:@selector(didReceivePlayCommand:)];
    
+   MPRemoteCommand *togglePlayPauseCommand = [commandCenter togglePlayPauseCommand];
+   [togglePlayPauseCommand setEnabled:YES];
+   [togglePlayPauseCommand removeTarget:self action:@selector(didReceiveTogglePlayPauseCommand:)];
+   [togglePlayPauseCommand addTarget:self action:@selector(didReceiveTogglePlayPauseCommand:)];
+   
+   MPRemoteCommand *nextTrackCommand = [commandCenter nextTrackCommand];
+   [nextTrackCommand setEnabled:YES];
+   [nextTrackCommand removeTarget:self action:@selector(didReceiveNextTrackCommand:)];
+   [nextTrackCommand addTarget:self action:@selector(didReceiveNextTrackCommand:)];
+   
+   MPRemoteCommand *previousTrackCommand = [commandCenter previousTrackCommand];
+   [previousTrackCommand setEnabled:YES];
+   [previousTrackCommand removeTarget:self action:@selector(didReceivePreviousTrackCommand:)];
+   [previousTrackCommand addTarget:self action:@selector(didReceivePreviousTrackCommand:)];
 }
 
 - (MPRemoteCommandHandlerStatus)didReceivePlayCommand:(MPRemoteCommand *)event
@@ -484,6 +498,18 @@ RCT_EXPORT_METHOD(setCoverImageUrl:(NSString *) coverImageUrl)
    return MPRemoteCommandHandlerStatusSuccess;
 }
 
+- (MPRemoteCommandHandlerStatus)didReceiveTogglePlayPauseCommand:(MPRemoteCommand *)event
+{
+   NSLog(@"didReceiveTogglePlayPauseCommand");
+   if (self.isPlaying) {
+      [self pause];
+   } else {
+      [self resume];
+   }
+   return MPRemoteCommandHandlerStatusSuccess;
+}
+
+
 - (MPRemoteCommandHandlerStatus)didReceiveSeekForwardCommand:(MPRemoteCommand *)event
 {
    NSLog(@"didReceiveSeekForwardCommand");
@@ -495,6 +521,22 @@ RCT_EXPORT_METHOD(setCoverImageUrl:(NSString *) coverImageUrl)
 {
    NSLog(@"didReceiveSeekBackwardCommand");
    [self goBack:15];
+   return MPRemoteCommandHandlerStatusSuccess;
+}
+
+- (MPRemoteCommandHandlerStatus)didReceiveNextTrackCommand:(MPRemoteCommand *)event
+{
+   NSLog(@"didReceiveNextTrackCommand");
+   [self.bridge.eventDispatcher sendDeviceEventWithName:@"AudioBridgeEvent"
+                                                   body:@{@"status": @"METADATA_UPDATED", @"command": @"didReceiveNextTrackCommand"}];
+   return MPRemoteCommandHandlerStatusSuccess;
+}
+
+- (MPRemoteCommandHandlerStatus)didReceivePreviousTrackCommand:(MPRemoteCommand *)event
+{
+   NSLog(@"didReceivePreviousTrackCommand");
+   [self.bridge.eventDispatcher sendDeviceEventWithName:@"AudioBridgeEvent"
+                                                   body:@{@"status": @"METADATA_UPDATED", @"command": @"didReceivePreviousTrackCommand"}];
    return MPRemoteCommandHandlerStatusSuccess;
 }
 
