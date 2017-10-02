@@ -64,6 +64,26 @@ RCT_EXPORT_MODULE()
    }
 }
 
+-(void)updatePausedTime
+{
+  if (!self.audioPlayer) {
+    return;
+  }
+  if (self.audioPlayer.state != STKAudioPlayerStatePaused) {
+    return;
+  }
+  
+  NSNumber *progress = [NSNumber numberWithFloat:self.audioPlayer.progress];
+  NSNumber *duration = [NSNumber numberWithFloat:self.audioPlayer.duration];
+  
+  [self updateNowPlayingInfo];
+  
+  [self.bridge.eventDispatcher sendDeviceEventWithName:@"AudioBridgeEvent" body:@{
+                                                                                  @"status": @"PAUSED",
+                                                                                  @"progress": progress,
+                                                                                  @"duration": duration,
+                                                                                  }];
+}
 
 - (void)dealloc
 {
@@ -116,6 +136,10 @@ RCT_EXPORT_METHOD(seekToTime:(double) seconds)
    }
    
    [self.audioPlayer seekToTime:seconds];
+  
+   if (self.audioPlayer.state == STKAudioPlayerStatePaused) {
+     [self updatePausedTime];
+   }
 }
 
 RCT_EXPORT_METHOD(goForward:(double) seconds)
@@ -133,6 +157,10 @@ RCT_EXPORT_METHOD(goForward:(double) seconds)
    } else {
       [self.audioPlayer seekToTime:newtime];
    }
+  
+   if (self.audioPlayer.state == STKAudioPlayerStatePaused) {
+     [self updatePausedTime];
+   }
 }
 
 RCT_EXPORT_METHOD(goBack:(double) seconds)
@@ -147,6 +175,10 @@ RCT_EXPORT_METHOD(goBack:(double) seconds)
       [self.audioPlayer seekToTime:0.0];
    } else {
       [self.audioPlayer seekToTime:newtime];
+   }
+  
+   if (self.audioPlayer.state == STKAudioPlayerStatePaused) {
+     [self updatePausedTime];
    }
 }
 
