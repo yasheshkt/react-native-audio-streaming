@@ -117,9 +117,6 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
 
   private void playInternal() {
     audioPlayerService.play();
-    if (shouldShowNotification) {
-      audioPlayerService.showNotification();
-    }
   }
 
   @ReactMethod public void stop() {
