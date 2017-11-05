@@ -14,6 +14,7 @@
 @property (nonatomic, retain) NSString *currentCoverImageUrl;
 @property (nonatomic, assign) bool isPlaying;
 @property (nonatomic, strong) UIImage *currentCoverImage;
+@property (nonatomic, strong) NSNumber *seekToWhenPossible;
 @end
 
 @implementation ReactNativeAudioStreaming
@@ -107,6 +108,10 @@ RCT_EXPORT_METHOD(play:(NSString *) streamUrl options:(NSDictionary *)options)
       [self.audioPlayer resume];
    } else {
       [self.audioPlayer play:streamUrl];
+   }
+       
+   if (options[@"progress"]) {
+      self.seekToWhenPossible = @([options[@"progress"] doubleValue]);
    }
    
    self.lastUrlString = streamUrl;
@@ -271,6 +276,11 @@ RCT_EXPORT_METHOD(setCoverImageUrl:(NSString *) coverImageUrl)
 
 - (void)audioPlayer:(STKAudioPlayer *)player didStartPlayingQueueItemId:(NSObject *)queueItemId
 {
+   if (self.seekToWhenPossible) {
+      NSNumber *seekTo = self.seekToWhenPossible;
+      self.seekToWhenPossible = nil;
+      [self seekToTime:[seekTo doubleValue]];
+   }
    NSLog(@"AudioPlayer is playing");
 }
 
@@ -305,6 +315,10 @@ RCT_EXPORT_METHOD(setCoverImageUrl:(NSString *) coverImageUrl)
 {
    NSNumber *duration = [NSNumber numberWithFloat:self.audioPlayer.duration];
    NSNumber *progress = [NSNumber numberWithFloat:self.audioPlayer.progress];
+   
+   if (!self.lastUrlString) {
+      self.lastUrlString = @"";
+   }
    
    switch (state) {
       case STKAudioPlayerStatePlaying:
