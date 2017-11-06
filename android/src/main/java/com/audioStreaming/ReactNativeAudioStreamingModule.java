@@ -23,6 +23,7 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
         implements ServiceConnection {
 
   public static final String SHOULD_SHOW_NOTIFICATION = "showInAndroidNotifications";
+  public static final String PROGRESS_KEY = "progress";
   private ReactApplicationContext context;
 
   private Class<?> clsActivity;
@@ -98,8 +99,14 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
     this.shouldShowNotification =
         options.hasKey(SHOULD_SHOW_NOTIFICATION) && options.getBoolean(SHOULD_SHOW_NOTIFICATION);
 //    signal.setURLStreaming(streamingURL); // URL of MP3 or AAC stream
+
+
     audioPlayerService.setTrackURL(streamingURL);
     playInternal();
+
+    if (options.hasKey(PROGRESS_KEY)) {
+      audioPlayerService.seekToTime(options.getDouble(PROGRESS_KEY));
+    }
   }
 
   @ReactMethod public void setTrackTitle(String trackTitle) {
