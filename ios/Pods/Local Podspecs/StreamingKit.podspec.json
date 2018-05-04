@@ -1,6 +1,6 @@
 {
   "name": "StreamingKit",
-  "version": "0.1.29",
+  "version": "0.1.31",
   "summary": "A fast and extensible audio streamer for iOS and OSX with support for gapless playback and custom (non-HTTP) sources.",
   "homepage": "https://github.com/tumtumtum/StreamingKit/",
   "license": "MIT",
@@ -9,10 +9,10 @@
   },
   "source": {
     "git": "https://github.com/tumtumtum/StreamingKit.git",
-    "tag": "0.1.29"
+    "tag": "0.1.31"
   },
   "platforms": {
-    "ios": "4.3",
+    "ios": "5.0",
     "osx": "10.7"
   },
   "requires_arc": true,
