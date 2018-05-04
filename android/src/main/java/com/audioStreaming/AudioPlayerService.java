@@ -1,5 +1,6 @@
 package com.audioStreaming;
 
+import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -11,16 +12,25 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
+import android.media.AudioManager;
+import android.media.session.MediaSession;
+import android.media.session.MediaSessionManager;
+import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
+import android.support.annotation.IntDef;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
+import android.support.v4.media.session.MediaButtonReceiver;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.widget.RemoteViews;
 
 import com.google.android.exoplayer2.ExoPlaybackException;
@@ -52,6 +62,7 @@ import java.io.InputStream;
  */
 
 public class AudioPlayerService extends Service implements ExoPlayer.EventListener {
+  private static final String TAG = "AudioPlayerService";
 
   //Notifications
   public static final String BROADCAST_PLAYBACK_STOP = "stop",
@@ -62,6 +73,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   private NotificationCompat.Builder notificationBuilder;
   private NotificationManager notificationManager = null;
   public static RemoteViews remoteViews;
+  private final MediaNotificationReceiver mediaNotificationReceiver = new MediaNotificationReceiver(this);
   private final NotificationIntentReceiver receiver = new NotificationIntentReceiver(this);
 
   //ExoPlayer
@@ -69,6 +81,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   private ExtractorsFactory extractorsFactory;
   private DataSource.Factory dataSourceFactory;
 
+  private MediaSessionCompat mMediaSession = null;
 
   //Internal
   private final IBinder binder = new RadioBinder();
@@ -88,6 +101,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
 
   @Override
   public IBinder onBind(Intent intent) {
+    Log.i(TAG, "On Bind " + intent.toString());
     return binder;
   }
 
@@ -115,16 +129,96 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     intentFilter.addAction(BROADCAST_PLAYBACK_PLAY);
     intentFilter.addAction(BROADCAST_EXIT);
     registerReceiver(this.receiver, intentFilter);
+
+  }
+
+  private void createMediaSession() {
+    final Context context = this.context.getApplicationContext();
+
+    MediaSessionCompat.Callback callback = new MediaSessionCompat.Callback() {
+
+      @Override
+      public boolean onMediaButtonEvent(Intent mediaButtonEvent) {
+        Log.i(TAG, mediaButtonEvent.toString());
+        final String intentAction = mediaButtonEvent.getAction();
+        if (Intent.ACTION_MEDIA_BUTTON.equals(intentAction)) {
+          final KeyEvent event = mediaButtonEvent.getParcelableExtra(
+                  Intent.EXTRA_KEY_EVENT);
+          if (event == null) {
+            return super.onMediaButtonEvent(mediaButtonEvent);
+          }
+          final int keycode = event.getKeyCode();
+          final int action = event.getAction();
+          if (event.getRepeatCount() == 0 && action == KeyEvent.ACTION_DOWN) {
+            switch (keycode) {
+              // Do what you want in here
+              case KeyEvent.KEYCODE_HEADSETHOOK:
+                AudioPlayerService.this.togglePlayPause();
+                break;
+              case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+                AudioPlayerService.this.togglePlayPause();
+                break;
+              case KeyEvent.KEYCODE_MEDIA_PAUSE:
+                AudioPlayerService.this.stop();
+                break;
+              case KeyEvent.KEYCODE_MEDIA_PLAY:
+                AudioPlayerService.this.play();
+                break;
+            }
+            return true;
+          }
+        }
+        return super.onMediaButtonEvent(mediaButtonEvent);
+      }
+
+      @Override
+      public void onPlay() {
+        // Handle the play button
+        Log.i(TAG, "On play button");
+      }
+
+      @Override
+      public void onPause() {
+        super.onPause();
+        Log.i(TAG, "On pause button");
+      }
+
+    };
+    mMediaSession = new MediaSessionCompat(this.context,
+            TAG); // Debugging tag, any string
+    mMediaSession.setFlags(
+            MediaSession.FLAG_HANDLES_MEDIA_BUTTONS |
+                    MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+    mMediaSession.setCallback(callback);
+
+  }
+
+  @Override
+  public void onDestroy() {
+    Log.i(TAG, "On destroy");
+    exitNotification();
+    super.onDestroy();
+  }
+
+  @Override
+  public boolean onUnbind(Intent intent) {
+    Log.i(TAG, "On Unbind " + intent.toString());
+    clearNotification();
+    stopSelf();
+    return super.onUnbind(intent);
   }
 
   @Override
   public void onTaskRemoved(Intent rootIntent) {
+    Log.i(TAG, "On task removed " + rootIntent.toString());
     clearNotification();
+    stopSelf();
     super.onTaskRemoved(rootIntent);
   }
 
   public void setData(Context context, ReactNativeAudioStreamingModule module) {
     this.context = context;
+    this.createMediaSession();
     this.clsActivity = module.getClassActivity();
     this.module = module;
 
@@ -229,9 +323,19 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   }
 
   public void play() {
-    player.setPlayWhenReady(true);
-    progressUpdater.run();
-    updateNotificationViews();
+      player.setPlayWhenReady(true);
+      progressUpdater.run();
+      showNotification();
+      updateNotificationViews();
+      mMediaSession.setActive(true);
+  }
+
+  public void togglePlayPause() {
+    if (this.isPlaying()) {
+      this.stop();
+    } else {
+      this.play();
+    }
   }
 
   public void seekToTime(Double time) {
@@ -242,8 +346,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   public void stop() {
     player.setPlayWhenReady(false);
     updateNotificationViews();
-//    Intent intent = new Intent(Mode.STOPPED);
-//    sendBroadcast(intent);
+    stopForeground(false);
     handler.removeCallbacks(progressUpdater);
   }
 
@@ -255,12 +358,11 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   public void showNotification() {
     remoteViews = new RemoteViews(context.getPackageName(), R.layout.streaming_notification_player);
 
-    notificationBuilder = new NotificationCompat.Builder(this.context)
+    notificationBuilder = new NotificationCompat.Builder(this)
+            .setPriority(Notification.PRIORITY_DEFAULT)
             .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off) // TODO Use app icon instead
             .setContentText("")
-            .setOngoing(true)
-//            .setContent(remoteViews)
-            .setCustomBigContentView(remoteViews);
+            .setContent(remoteViews);
 
     Intent resultIntent = new Intent(this.context, this.clsActivity);
     resultIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -273,12 +375,16 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     PendingIntent resultPendingIntent = stackBuilder.getPendingIntent(0,
             PendingIntent.FLAG_UPDATE_CURRENT);
 
+
     notificationBuilder.setContentIntent(resultPendingIntent);
     remoteViews.setOnClickPendingIntent(R.id.btn_streaming_notification_play, makePendingIntent(BROADCAST_PLAYBACK_PLAY));
     remoteViews.setImageViewResource(R.id.btn_streaming_notification_play, android.R.drawable.ic_media_pause);
     remoteViews.setOnClickPendingIntent(R.id.btn_streaming_notification_stop, makePendingIntent(BROADCAST_EXIT));
     notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-    notificationManager.notify(NOTIFY_ME_ID, notificationBuilder.build());
+    //notificationManager.notify(NOTIFY_ME_ID, notificationBuilder.build());
+
+    final Notification notification = notificationBuilder.build();
+    startForeground(NOTIFY_ME_ID, notification);
   }
 
   private void updateNotificationViews() {
@@ -315,10 +421,17 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   }
 
   public void exitNotification() {
-    notificationManager.cancelAll();
-    clearNotification();
+    stop();
+    stopForeground(true);
+    if (notificationManager != null) {
+      notificationManager.cancel(NOTIFY_ME_ID);
+      notificationManager.cancelAll();
+    }
+
     notificationBuilder = null;
     notificationManager = null;
+
+    stopSelf();
   }
 
   public NotificationManager getNotificationManager() {
@@ -415,10 +528,25 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
           this.audioPlayerService.stop();
         }
       } else if (action.equals(AudioPlayerService.BROADCAST_EXIT)) {
-        this.audioPlayerService.getNotificationManager().cancelAll();
-        this.audioPlayerService.stop();
         this.audioPlayerService.exitNotification();
       }
+    }
+  }
+
+  class MediaNotificationReceiver extends MediaButtonReceiver {
+    private AudioPlayerService audioPlayerService;
+
+    public MediaNotificationReceiver(AudioPlayerService service) {
+      super();
+      this.audioPlayerService = service;
+    }
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+      super.onReceive(context, intent);
+
+      String action = intent.getAction();
+      Log.i(TAG, action);
     }
   }
 
