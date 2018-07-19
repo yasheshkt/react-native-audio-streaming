@@ -489,6 +489,10 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
       }
       case ExoPlayer.STATE_ENDED: {
         Intent intent = new Intent(Mode.STOPPED);
+        if (duration >= 0 && progress >= 0) {
+          intent.putExtra("duration", duration);
+          intent.putExtra("progress", progress);
+        }
         sendBroadcast(intent);
         break;
       }
