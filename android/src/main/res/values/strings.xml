@@ -1,0 +1,5 @@
+<resources>
+    <string name="rnAudioStreamingChannelId">1</string>
+    <string name="rnAudioStreamingChannelName">Default</string>
+    <string name="rnAudioStreamingChannelDescription">Default channel</string>
+</resources>
