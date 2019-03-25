@@ -27,7 +27,6 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   private ReactApplicationContext context;
 
   private Class<?> clsActivity;
-  private static Signal signal;
   private static AudioPlayerService audioPlayerService;
   private Intent bindIntent;
   private String streamingURL;
@@ -52,10 +51,6 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   public void stopOnCall() {
     //this.signal.stop();
     audioPlayerService.stop();
-  }
-
-  public Signal getSignal() {
-    return signal;
   }
 
   public void sendEvent(ReactContext reactContext, String eventName, @Nullable WritableMap params) {
@@ -90,7 +85,7 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   }
 
   @Override public void onServiceDisconnected(ComponentName className) {
-    signal = null;
+    audioPlayerService = null;
   }
 
   @ReactMethod public void play(String streamingURL, ReadableMap options) {
@@ -146,12 +141,12 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   }
 
   @ReactMethod public void destroyNotification() {
-    signal.exitNotification();
+    audioPlayerService.exitNotification();
   }
 
   @ReactMethod public void getStatus(Callback callback) {
     WritableMap state = Arguments.createMap();
-    state.putString("status", signal != null && signal.isPlaying ? Mode.PLAYING : Mode.STOPPED);
+    state.putString("status", audioPlayerService != null && audioPlayerService.isPlaying() ? Mode.PLAYING : Mode.STOPPED);
     callback.invoke(null, state);
   }
 }

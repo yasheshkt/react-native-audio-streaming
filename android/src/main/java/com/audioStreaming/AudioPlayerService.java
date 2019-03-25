@@ -1,6 +1,7 @@
 package com.audioStreaming;
 
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -11,22 +12,17 @@ import android.content.IntentFilter;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.drawable.Drawable;
-import android.media.AudioManager;
 import android.media.session.MediaSession;
-import android.media.session.MediaSessionManager;
-import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
-import android.support.annotation.IntDef;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
 import android.support.v4.media.session.MediaButtonReceiver;
 import android.support.v4.media.session.MediaSessionCompat;
-import android.support.v4.media.session.PlaybackStateCompat;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import android.util.Log;
@@ -380,8 +376,20 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     remoteViews.setOnClickPendingIntent(R.id.btn_streaming_notification_play, makePendingIntent(BROADCAST_PLAYBACK_PLAY));
     remoteViews.setImageViewResource(R.id.btn_streaming_notification_play, android.R.drawable.ic_media_pause);
     remoteViews.setOnClickPendingIntent(R.id.btn_streaming_notification_stop, makePendingIntent(BROADCAST_EXIT));
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      String channelId = getString(R.string.rnAudioStreamingChannelId);
+      CharSequence name = getString(R.string.rnAudioStreamingChannelName);
+      String description = getString(R.string.rnAudioStreamingChannelDescription);
+      int importance = NotificationManager.IMPORTANCE_DEFAULT;
+      NotificationChannel channel = new NotificationChannel(channelId, name, importance);
+      channel.setDescription(description);
+      NotificationManager notificationManager = getSystemService(NotificationManager.class);
+      notificationManager.createNotificationChannel(channel);
+      notificationBuilder.setChannelId(channelId);
+    }
+
     notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-    //notificationManager.notify(NOTIFY_ME_ID, notificationBuilder.build());
 
     final Notification notification = notificationBuilder.build();
     startForeground(NOTIFY_ME_ID, notification);

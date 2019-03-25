@@ -1,23 +1,18 @@
-allprojects {
-    repositories {
-        mavenLocal()
-        jcenter()
-        maven {
-            // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
-            url "$rootDir/../node_modules/react-native/android"
-        }
-        maven {
-            url "https://maven.google.com"
-        }
-    }
+def safeExtGet(prop, fallback) {
+    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
 }
 
 buildscript {
     repositories {
         jcenter()
+        google()
+        maven {
+            url 'https://maven.google.com/'
+            name 'Google'
+        }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.2.3'
+        classpath 'com.android.tools.build:gradle:3.2.1'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -27,27 +22,32 @@ buildscript {
 apply plugin: 'com.android.library'
 
 android {
-    compileSdkVersion 26
-    buildToolsVersion "23.0.1"
+    compileSdkVersion safeExtGet('compileSdkVersion', 27)
+    //noinspection GradleDependency
+    buildToolsVersion safeExtGet('buildToolsVersion', '28.0.3')
 
     defaultConfig {
-        minSdkVersion 16
-        targetSdkVersion 26
-        versionCode 1
-        versionName "1.0"
-        ndk {
-            abiFilters "armeabi-v7a", "x86"
-        }
+        minSdkVersion safeExtGet('minSdkVersion', 19)
+        //noinspection OldTargetApi
+        targetSdkVersion safeExtGet('targetSdkVersion', 27)
     }
     lintOptions {
        warning 'InvalidPackage'
     }
 }
 
-dependencies {
-    compile 'com.facebook.react:react-native:+'
-    compile files('libs/aacdecoder-android-0.8.jar')
-    compile 'com.android.support:support-v4:25.3.1'
-    compile 'com.google.android.exoplayer:exoplayer:r2.4.0'
+repositories {
+    mavenLocal()
+    google()
+    jcenter()
+    maven {
+        // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
+        url "$rootDir/../node_modules/react-native/android"
+    }
 }
-  
+
+dependencies {
+    implementation 'com.facebook.react:react-native:+'
+    implementation 'com.google.android.exoplayer:exoplayer:r2.4.0'
+    implementation "com.android.support:support-v4:${safeExtGet('supportLibVersion', '27.0.0')}"
+}
