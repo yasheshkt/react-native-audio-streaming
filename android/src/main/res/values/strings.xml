@@ -1,4 +1,6 @@
 <resources>
+    <string-array name="rnAudioStreamingDeletableChannelIds">
+    </string-array>
     <string name="rnAudioStreamingChannelId">1</string>
     <string name="rnAudioStreamingChannelName">Default</string>
     <string name="rnAudioStreamingChannelDescription">Default channel</string>

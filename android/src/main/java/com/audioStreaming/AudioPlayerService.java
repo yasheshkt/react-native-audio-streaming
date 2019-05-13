@@ -356,6 +356,8 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
 
     notificationBuilder = new NotificationCompat.Builder(this)
             .setPriority(Notification.PRIORITY_DEFAULT)
+            .setVibrate(null)
+            .setSound(null)
             .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off) // TODO Use app icon instead
             .setContentText("")
             .setContent(remoteViews);
@@ -378,12 +380,20 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     remoteViews.setOnClickPendingIntent(R.id.btn_streaming_notification_stop, makePendingIntent(BROADCAST_EXIT));
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      String[] deletableChannelIds = getResources().getStringArray(R.array.rnAudioStreamingDeletableChannelIds);
+      for (String id: deletableChannelIds) {
+        notificationManager.deleteNotificationChannel(id);
+      }
+
       String channelId = getString(R.string.rnAudioStreamingChannelId);
       CharSequence name = getString(R.string.rnAudioStreamingChannelName);
       String description = getString(R.string.rnAudioStreamingChannelDescription);
-      int importance = NotificationManager.IMPORTANCE_DEFAULT;
+      int importance = NotificationManager.IMPORTANCE_LOW;
       NotificationChannel channel = new NotificationChannel(channelId, name, importance);
       channel.setDescription(description);
+      channel.setSound(null, null);
+      channel.setVibrationPattern(null);
+      channel.enableVibration(false);
       NotificationManager notificationManager = getSystemService(NotificationManager.class);
       notificationManager.createNotificationChannel(channel);
       notificationBuilder.setChannelId(channelId);
