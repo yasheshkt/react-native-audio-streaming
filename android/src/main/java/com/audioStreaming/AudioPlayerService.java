@@ -458,9 +458,20 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
 
 
   //ExoPlayer EventListener implementation
+
   @Override
-  public void onTimelineChanged(Timeline timeline, Object manifest) {
-    Log.i("APS", timeline.toString());
+  public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) {
+    Log.i("APS", "onShuffleModeEnabledChanged " + shuffleModeEnabled);
+  }
+
+  @Override
+  public void onTimelineChanged(Timeline timeline, Object manifest, int reason) {
+    Log.i("APS", timeline.toString() + " " + reason);
+  }
+
+  @Override
+  public void onRepeatModeChanged(int repeatMode) {
+    Log.i("APS", "onRepeatModeChanged " + repeatMode);
   }
 
   @Override
@@ -523,8 +534,13 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   }
 
   @Override
-  public void onPositionDiscontinuity() {
-    Log.i("APS", "On position discontinuity");
+  public void onSeekProcessed() {
+    Log.i("APS", "On seek processed");
+  }
+
+  @Override
+  public void onPositionDiscontinuity(int reason) {
+    Log.i("APS", "On position discontinuity " + reason);
   }
 
   @Override

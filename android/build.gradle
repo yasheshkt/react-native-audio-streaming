@@ -37,9 +37,9 @@ android {
 }
 
 repositories {
-    mavenLocal()
     google()
     jcenter()
+    mavenLocal()
     maven {
         // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
         url "$rootDir/../node_modules/react-native/android"
@@ -48,6 +48,6 @@ repositories {
 
 dependencies {
     implementation 'com.facebook.react:react-native:+'
-    implementation 'com.google.android.exoplayer:exoplayer:r2.4.0'
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.8.4'
     implementation "com.android.support:support-v4:${safeExtGet('supportLibVersion', '27.0.0')}"
 }
