@@ -43,6 +43,10 @@ RCT_EXPORT_MODULE()
    return self;
 }
 
++(BOOL)requiresMainQueueSetup {
+   return true;
+}
+
 
 -(void) tick:(NSTimer*)timer
 {
