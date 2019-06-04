@@ -352,6 +352,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
 
   // Notifications
   public void showNotification() {
+    notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
     remoteViews = new RemoteViews(context.getPackageName(), R.layout.streaming_notification_player);
 
     notificationBuilder = new NotificationCompat.Builder(this)
@@ -394,12 +395,11 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
       channel.setSound(null, null);
       channel.setVibrationPattern(null);
       channel.enableVibration(false);
-      NotificationManager notificationManager = getSystemService(NotificationManager.class);
       notificationManager.createNotificationChannel(channel);
       notificationBuilder.setChannelId(channelId);
     }
 
-    notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+    
 
     final Notification notification = notificationBuilder.build();
     startForeground(NOTIFY_ME_ID, notification);
