@@ -35,17 +35,10 @@ import com.google.android.exoplayer2.ExoPlayerFactory;
 import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.Timeline;
-import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
-import com.google.android.exoplayer2.extractor.ExtractorsFactory;
-import com.google.android.exoplayer2.source.ExtractorMediaSource;
 import com.google.android.exoplayer2.source.MediaSource;
+import com.google.android.exoplayer2.source.ProgressiveMediaSource;
 import com.google.android.exoplayer2.source.TrackGroupArray;
-import com.google.android.exoplayer2.trackselection.AdaptiveTrackSelection;
-import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
-import com.google.android.exoplayer2.trackselection.TrackSelection;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
-import com.google.android.exoplayer2.trackselection.TrackSelector;
-import com.google.android.exoplayer2.upstream.BandwidthMeter;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
@@ -69,12 +62,10 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   private NotificationCompat.Builder notificationBuilder;
   private NotificationManager notificationManager = null;
   public static RemoteViews remoteViews;
-  private final MediaNotificationReceiver mediaNotificationReceiver = new MediaNotificationReceiver(this);
   private final NotificationIntentReceiver receiver = new NotificationIntentReceiver(this);
 
   //ExoPlayer
   private SimpleExoPlayer player;
-  private ExtractorsFactory extractorsFactory;
   private DataSource.Factory dataSourceFactory;
 
   private MediaSessionCompat mMediaSession = null;
@@ -129,8 +120,6 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   }
 
   private void createMediaSession() {
-    final Context context = this.context.getApplicationContext();
-
     MediaSessionCompat.Callback callback = new MediaSessionCompat.Callback() {
 
       @Override
@@ -246,23 +235,12 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
 
   }
   public void createPlayer() {
-    BandwidthMeter bandwidthMeter = new DefaultBandwidthMeter();
-    DefaultBandwidthMeter defaultBandwidthMeter = new DefaultBandwidthMeter();
-    extractorsFactory = new DefaultExtractorsFactory();
-
-    TrackSelection.Factory trackSelectionFactory = new AdaptiveTrackSelection.Factory(bandwidthMeter);
-
-    TrackSelector trackSelector = new DefaultTrackSelector(trackSelectionFactory);
-
-/*        dataSourceFactory = new DefaultDataSourceFactory(this,
-                Util.getUserAgent(this, "mediaPlayerSample"),
-                (TransferListener<? super DataSource>) bandwidthMeter);*/
+    DefaultBandwidthMeter defaultBandwidthMeter = new DefaultBandwidthMeter.Builder(this).build();
 
     dataSourceFactory = new DefaultDataSourceFactory(this,
-            Util.getUserAgent(this, "mediaPlayerSample"), defaultBandwidthMeter);
+            Util.getUserAgent(this, this.getApplicationContext().getPackageName()), defaultBandwidthMeter);
 
-
-    player = ExoPlayerFactory.newSimpleInstance(this, trackSelector);
+    player = ExoPlayerFactory.newSimpleInstance(this);
 
     player.addListener(AudioPlayerService.this);
   }
@@ -283,7 +261,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   public void setTrackURL(String trackUrl) {
     if (trackUrl != null && !trackUrl.equals(this.trackUrl)) {
       this.trackUrl = trackUrl;
-      MediaSource mediaSource = new ExtractorMediaSource(Uri.parse(trackUrl), dataSourceFactory, extractorsFactory, null, null);
+      MediaSource mediaSource = new ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(this.trackUrl));
       player.prepare(mediaSource);
     }
   }
@@ -355,7 +333,27 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
     remoteViews = new RemoteViews(context.getPackageName(), R.layout.streaming_notification_player);
 
-    notificationBuilder = new NotificationCompat.Builder(this)
+    String channelId = getString(R.string.rnAudioStreamingChannelId);
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      String[] deletableChannelIds = getResources().getStringArray(R.array.rnAudioStreamingDeletableChannelIds);
+      for (String id: deletableChannelIds) {
+        notificationManager.deleteNotificationChannel(id);
+      }
+
+      CharSequence name = getString(R.string.rnAudioStreamingChannelName);
+      String description = getString(R.string.rnAudioStreamingChannelDescription);
+      int importance = NotificationManager.IMPORTANCE_LOW;
+      NotificationChannel channel = new NotificationChannel(channelId, name, importance);
+      channel.setDescription(description);
+      channel.setSound(null, null);
+      channel.setVibrationPattern(null);
+      channel.enableVibration(false);
+      notificationManager.createNotificationChannel(channel);
+
+    }
+
+    notificationBuilder = new NotificationCompat.Builder(this, channelId)
             .setPriority(Notification.PRIORITY_DEFAULT)
             .setVibrate(null)
             .setSound(null)
@@ -379,27 +377,6 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     remoteViews.setOnClickPendingIntent(R.id.btn_streaming_notification_play, makePendingIntent(BROADCAST_PLAYBACK_PLAY));
     remoteViews.setImageViewResource(R.id.btn_streaming_notification_play, android.R.drawable.ic_media_pause);
     remoteViews.setOnClickPendingIntent(R.id.btn_streaming_notification_stop, makePendingIntent(BROADCAST_EXIT));
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      String[] deletableChannelIds = getResources().getStringArray(R.array.rnAudioStreamingDeletableChannelIds);
-      for (String id: deletableChannelIds) {
-        notificationManager.deleteNotificationChannel(id);
-      }
-
-      String channelId = getString(R.string.rnAudioStreamingChannelId);
-      CharSequence name = getString(R.string.rnAudioStreamingChannelName);
-      String description = getString(R.string.rnAudioStreamingChannelDescription);
-      int importance = NotificationManager.IMPORTANCE_LOW;
-      NotificationChannel channel = new NotificationChannel(channelId, name, importance);
-      channel.setDescription(description);
-      channel.setSound(null, null);
-      channel.setVibrationPattern(null);
-      channel.enableVibration(false);
-      notificationManager.createNotificationChannel(channel);
-      notificationBuilder.setChannelId(channelId);
-    }
-
-    
 
     final Notification notification = notificationBuilder.build();
     startForeground(NOTIFY_ME_ID, notification);
@@ -452,13 +429,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     stopSelf();
   }
 
-  public NotificationManager getNotificationManager() {
-    return notificationManager;
-  }
-
-
   //ExoPlayer EventListener implementation
-
   @Override
   public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) {
     Log.i("APS", "onShuffleModeEnabledChanged " + shuffleModeEnabled);
@@ -559,6 +530,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     @Override
     public void onReceive(Context context, Intent intent) {
       String action = intent.getAction();
+      if (action == null) { return; }
       if (action.equals(AudioPlayerService.BROADCAST_PLAYBACK_PLAY)) {
         if (!this.audioPlayerService.isPlaying()) {
           this.audioPlayerService.play();
@@ -571,22 +543,22 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     }
   }
 
-  class MediaNotificationReceiver extends MediaButtonReceiver {
-    private AudioPlayerService audioPlayerService;
-
-    public MediaNotificationReceiver(AudioPlayerService service) {
-      super();
-      this.audioPlayerService = service;
-    }
-
-    @Override
-    public void onReceive(Context context, Intent intent) {
-      super.onReceive(context, intent);
-
-      String action = intent.getAction();
-      Log.i(TAG, action);
-    }
-  }
+//  class MediaNotificationReceiver extends MediaButtonReceiver {
+//    private AudioPlayerService audioPlayerService;
+//
+//    public MediaNotificationReceiver(AudioPlayerService service) {
+//      super();
+//      this.audioPlayerService = service;
+//    }
+//
+//    @Override
+//    public void onReceive(Context context, Intent intent) {
+//      super.onReceive(context, intent);
+//
+//      String action = intent.getAction();
+//      Log.i(TAG, action);
+//    }
+//  }
 
   public interface DownloadImageResultListener {
     void onCompletion(Bitmap bitmap);
@@ -594,7 +566,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
 
   // DownloadImage AsyncTask
   private class DownloadImageTask extends AsyncTask<String, Void, Bitmap> {
-    public DownloadImageResultListener listener = null;
+    public DownloadImageResultListener listener;
 
     public DownloadImageTask(DownloadImageResultListener listener) {
       this.listener = listener;
