@@ -49,7 +49,6 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   }
 
   public void stopOnCall() {
-    //this.signal.stop();
     audioPlayerService.stop();
   }
 
@@ -75,8 +74,6 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   }
 
   @Override public void onServiceConnected(ComponentName className, IBinder service) {
-//    signal = ((Signal.RadioBinder) service).getService();
-//    signal.setData(this.context, this);
     audioPlayerService = ((AudioPlayerService.RadioBinder) service).getService();
     audioPlayerService.setData(this.context, this);
 
@@ -93,8 +90,6 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
     this.streamingURL = streamingURL;
     this.shouldShowNotification =
         options.hasKey(SHOULD_SHOW_NOTIFICATION) && options.getBoolean(SHOULD_SHOW_NOTIFICATION);
-//    signal.setURLStreaming(streamingURL); // URL of MP3 or AAC stream
-
 
     audioPlayerService.setTrackURL(streamingURL);
     playInternal();
