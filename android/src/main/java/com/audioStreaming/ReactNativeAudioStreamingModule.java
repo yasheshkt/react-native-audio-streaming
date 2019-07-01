@@ -10,7 +10,9 @@ import android.util.Log;
 import com.audioStreaming.AudioPlayerService;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactBridge;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -20,7 +22,7 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 import javax.annotation.Nullable;
 
 public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
-        implements ServiceConnection {
+        implements ServiceConnection, LifecycleEventListener {
 
   public static final String SHOULD_SHOW_NOTIFICATION = "showInAndroidNotifications";
   public static final String PROGRESS_KEY = "progress";
@@ -57,20 +59,22 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
             .emit(eventName, params);
   }
 
+  private void bindToAudioService() {
+    try {
+      bindIntent = new Intent(this.context, AudioPlayerService.class);
+      this.context.bindService(bindIntent, this, Context.BIND_AUTO_CREATE);
+    } catch (Exception e) {
+      Log.e("ERROR", e.getMessage());
+    }
+  }
+
   @Override public String getName() {
     return "ReactNativeAudioStreaming";
   }
 
   @Override public void initialize() {
     super.initialize();
-
-    try {
-      bindIntent = new Intent(this.context, AudioPlayerService.class);
-      //bindIntent = new Intent(this.context, Signal.class);
-      this.context.bindService(bindIntent, this, Context.BIND_AUTO_CREATE);
-    } catch (Exception e) {
-      Log.e("ERROR", e.getMessage());
-    }
+    this.context.addLifecycleEventListener(this);
   }
 
   @Override public void onServiceConnected(ComponentName className, IBinder service) {
@@ -118,6 +122,7 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
 
   @ReactMethod public void stop() {
     //signal.stop();
+    if (audioPlayerService == null) { return; }
     audioPlayerService.stop();
   }
 
@@ -143,5 +148,21 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
     WritableMap state = Arguments.createMap();
     state.putString("status", audioPlayerService != null && audioPlayerService.isPlaying() ? Mode.PLAYING : Mode.STOPPED);
     callback.invoke(null, state);
+  }
+
+
+  @Override
+  public void onHostResume() {
+    this.bindToAudioService();
+  }
+
+  @Override
+  public void onHostPause() {
+
+  }
+
+  @Override
+  public void onHostDestroy() {
+
   }
 }
