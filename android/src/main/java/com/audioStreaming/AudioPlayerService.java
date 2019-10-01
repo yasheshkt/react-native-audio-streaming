@@ -5,6 +5,8 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -72,6 +74,39 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
 
   //Internal
   private final IBinder binder = new RadioBinder();
+  private final BroadcastReceiver mBroadcastReceiver1 = new BroadcastReceiver() {
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+      final String action = intent.getAction();
+
+      if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+        final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+        switch (state) {
+          case BluetoothAdapter.STATE_OFF:
+            AudioPlayerService.this.stop();
+            break;
+          case BluetoothAdapter.STATE_TURNING_OFF:
+            AudioPlayerService.this.stop();
+            break;
+        }
+      }
+    }
+  };
+
+  private final BroadcastReceiver mBroadcastReceiver2 = new BroadcastReceiver() {
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+      String action = intent.getAction();
+
+      switch (action){
+        case BluetoothDevice.ACTION_ACL_DISCONNECTED:
+          AudioPlayerService.this.stop();
+          break;
+      }
+    }
+  };
 
   private Context context;
   private EventsReceiver eventsReceiver;
@@ -110,6 +145,15 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   public void onCreate() {
     super.onCreate();
     createPlayer();
+
+    IntentFilter filter1 = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+    registerReceiver(mBroadcastReceiver1, filter1);
+
+    IntentFilter filter2 = new IntentFilter();
+    filter2.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
+    filter2.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+    registerReceiver(mBroadcastReceiver2, filter2);
+
 
     IntentFilter intentFilter = new IntentFilter();
     intentFilter.addAction(BROADCAST_PLAYBACK_STOP);
@@ -183,6 +227,8 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     Log.i(TAG, "On destroy");
     exitNotification();
     super.onDestroy();
+    unregisterReceiver(mBroadcastReceiver1);
+    unregisterReceiver(mBroadcastReceiver2);
   }
 
   @Override
@@ -297,11 +343,11 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   }
 
   public void play() {
-      player.setPlayWhenReady(true);
-      progressUpdater.run();
-      showNotification();
-      updateNotificationViews();
-      mMediaSession.setActive(true);
+    player.setPlayWhenReady(true);
+    progressUpdater.run();
+    showNotification();
+    updateNotificationViews();
+    mMediaSession.setActive(true);
   }
 
   public void togglePlayPause() {
