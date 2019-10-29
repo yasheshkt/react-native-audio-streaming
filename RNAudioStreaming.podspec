@@ -14,8 +14,7 @@ Pod::Spec.new do |s|
   s.requires_arc        = true
   s.platform            = :ios, "7.0"
   s.preserve_paths      = "**/*.js"
-  
-  s.dependency 'React-Core'
+  s.dependency 'React'
   
   s.subspec 'Main' do |ss|
     ss.source_files     = "ios/ReactNativeAudioStreaming.{h,m}"
