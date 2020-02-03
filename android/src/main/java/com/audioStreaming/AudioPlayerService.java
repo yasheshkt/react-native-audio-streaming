@@ -14,6 +14,7 @@ import android.content.IntentFilter;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.media.AudioManager;
 import android.media.session.MediaSession;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -21,9 +22,11 @@ import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
-import android.support.v4.app.NotificationCompat;
-import android.support.v4.app.TaskStackBuilder;
-import android.support.v4.media.session.MediaButtonReceiver;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.TaskStackBuilder;
+import androidx.media.session.MediaButtonReceiver;
+
+import android.os.Looper;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
@@ -74,39 +77,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
 
   //Internal
   private final IBinder binder = new RadioBinder();
-  private final BroadcastReceiver mBroadcastReceiver1 = new BroadcastReceiver() {
 
-    @Override
-    public void onReceive(Context context, Intent intent) {
-      final String action = intent.getAction();
-
-      if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
-        final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-        switch (state) {
-          case BluetoothAdapter.STATE_OFF:
-            AudioPlayerService.this.stop();
-            break;
-          case BluetoothAdapter.STATE_TURNING_OFF:
-            AudioPlayerService.this.stop();
-            break;
-        }
-      }
-    }
-  };
-
-  private final BroadcastReceiver mBroadcastReceiver2 = new BroadcastReceiver() {
-
-    @Override
-    public void onReceive(Context context, Intent intent) {
-      String action = intent.getAction();
-
-      switch (action){
-        case BluetoothDevice.ACTION_ACL_DISCONNECTED:
-          AudioPlayerService.this.stop();
-          break;
-      }
-    }
-  };
 
   private Context context;
   private EventsReceiver eventsReceiver;
@@ -120,6 +91,20 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   private String coverImageUrl;
   private String artist;
   private Bitmap coverImageBitmap;
+
+  Handler mainThreadHandler = new Handler(Looper.getMainLooper());
+
+  private class BecomingNoisyReceiver extends BroadcastReceiver {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+      if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
+        // Pause the playback
+        AudioPlayerService.this.stop();
+      }
+    }
+  }
+  private IntentFilter becomingNoisyIntentFilter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+  private BecomingNoisyReceiver myNoisyAudioStreamReceiver = new BecomingNoisyReceiver();
 
   @Override
   public IBinder onBind(Intent intent) {
@@ -146,14 +131,6 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     super.onCreate();
     createPlayer();
 
-    IntentFilter filter1 = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
-    registerReceiver(mBroadcastReceiver1, filter1);
-
-    IntentFilter filter2 = new IntentFilter();
-    filter2.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
-    filter2.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
-    registerReceiver(mBroadcastReceiver2, filter2);
-
 
     IntentFilter intentFilter = new IntentFilter();
     intentFilter.addAction(BROADCAST_PLAYBACK_STOP);
@@ -161,6 +138,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     intentFilter.addAction(BROADCAST_EXIT);
     registerReceiver(this.receiver, intentFilter);
 
+    registerReceiver(myNoisyAudioStreamReceiver, becomingNoisyIntentFilter);
   }
 
   private void createMediaSession() {
@@ -203,21 +181,21 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
       @Override
       public void onPlay() {
         // Handle the play button
-        Log.i(TAG, "On play button");
+        Log.i(TAG, "On play");
       }
 
       @Override
       public void onPause() {
         super.onPause();
-        Log.i(TAG, "On pause button");
+        Log.i(TAG, "On pause");
       }
 
     };
     mMediaSession = new MediaSessionCompat(this.context,
             TAG); // Debugging tag, any string
     mMediaSession.setFlags(
-            MediaSession.FLAG_HANDLES_MEDIA_BUTTONS |
-                    MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+            MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS |
+                    MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
     mMediaSession.setCallback(callback);
 
   }
@@ -225,10 +203,9 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   @Override
   public void onDestroy() {
     Log.i(TAG, "On destroy");
+    unregisterReceiver(myNoisyAudioStreamReceiver);
     exitNotification();
     super.onDestroy();
-    unregisterReceiver(mBroadcastReceiver1);
-    unregisterReceiver(mBroadcastReceiver2);
   }
 
   @Override
@@ -292,23 +269,25 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   }
 
   private void updateProgress() {
-    if (player.getPlaybackState() ==  ExoPlayer.STATE_READY) {
-      double progress = ((double)player.getCurrentPosition() / 1000.0);
-      double duration = ((double)player.getDuration() / 1000.0);
-      if (player.getPlayWhenReady() && progress >= 0 && duration >= 0) {
-        Intent intent = new Intent(Mode.PLAYING);
-        intent.putExtra("duration", duration);
-        intent.putExtra("progress", progress);
-        sendBroadcast(intent);
+    mainThreadHandler.post(() -> {
+      if (player.getPlaybackState() ==  ExoPlayer.STATE_READY) {
+        double progress = ((double)player.getCurrentPosition() / 1000.0);
+        double duration = ((double)player.getDuration() / 1000.0);
+        if (player.getPlayWhenReady() && progress >= 0 && duration >= 0) {
+          Intent intent = new Intent(Mode.PLAYING);
+          intent.putExtra("duration", duration);
+          intent.putExtra("progress", progress);
+          sendBroadcast(intent);
+        }
       }
-    }
+    });
   }
 
   public void setTrackURL(String trackUrl) {
     if (trackUrl != null && !trackUrl.equals(this.trackUrl)) {
       this.trackUrl = trackUrl;
       MediaSource mediaSource = new ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(Uri.parse(this.trackUrl));
-      player.prepare(mediaSource);
+      mainThreadHandler.post(() -> player.prepare(mediaSource));
     }
   }
 
@@ -343,31 +322,41 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   }
 
   public void play() {
-    player.setPlayWhenReady(true);
-    progressUpdater.run();
-    showNotification();
-    updateNotificationViews();
-    mMediaSession.setActive(true);
+    Log.i(TAG, "Play");
+    // player.setPlayWhenReady(true);
+    mainThreadHandler.post(() -> {
+      player.setPlayWhenReady(true);
+      progressUpdater.run();
+      showNotification();
+      updateNotificationViews();
+      mMediaSession.setActive(true);
+
+    });
   }
 
   public void togglePlayPause() {
-    if (this.isPlaying()) {
-      this.stop();
-    } else {
-      this.play();
-    }
+    mainThreadHandler.post(() -> {
+      if (this.isPlaying()) {
+        this.stop();
+      } else {
+        this.play();
+      }
+    });
   }
 
   public void seekToTime(Double time) {
     long seekToMillis = (long)(time*1000);
-    player.seekTo(seekToMillis);
+
+    mainThreadHandler.post(() -> player.seekTo(seekToMillis));
   }
 
   public void stop() {
-    player.setPlayWhenReady(false);
-    updateNotificationViews();
-    stopForeground(false);
-    handler.removeCallbacks(progressUpdater);
+    mainThreadHandler.post(() -> {
+      player.setPlayWhenReady(false);
+      updateNotificationViews();
+      stopForeground(false);
+      handler.removeCallbacks(progressUpdater);
+    });
   }
 
   public boolean isPlaying() {
@@ -429,25 +418,27 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   }
 
   private void updateNotificationViews() {
+
     if (remoteViews != null && notificationBuilder != null && notificationManager != null) {
+      mainThreadHandler.post(() -> {
+        Resources resources = context.getResources();
+        int playResource = resources.getIdentifier("notification_play_icon", "drawable", context.getPackageName());
+        if (playResource == 0) {
+          playResource = android.R.drawable.ic_media_play;
+        }
+        int pauseResource = resources.getIdentifier("notification_pause_icon", "drawable", context.getPackageName());
+        if (pauseResource == 0) {
+          pauseResource = android.R.drawable.ic_media_pause;
+        }
+        remoteViews.setImageViewResource(R.id.btn_streaming_notification_play, this.isPlaying() ? pauseResource : playResource);
 
-      Resources resources = context.getResources();
-      int playResource = resources.getIdentifier("notification_play_icon", "drawable", context.getPackageName());
-      if (playResource == 0) {
-        playResource = android.R.drawable.ic_media_play;
-      }
-      int pauseResource = resources.getIdentifier("notification_pause_icon", "drawable", context.getPackageName());
-      if (pauseResource == 0) {
-        pauseResource = android.R.drawable.ic_media_pause;
-      }
-      remoteViews.setImageViewResource(R.id.btn_streaming_notification_play, this.isPlaying() ? pauseResource : playResource);
+        remoteViews.setImageViewBitmap(R.id.coverImageView, this.coverImageBitmap);
 
-      remoteViews.setImageViewBitmap(R.id.coverImageView, this.coverImageBitmap);
-
-      remoteViews.setTextViewText(R.id.trackTitleText, this.trackTitle);
-      remoteViews.setTextViewText(R.id.artistText, this.artist);
-      notificationBuilder.setContent(remoteViews);
-      notificationManager.notify(NOTIFY_ME_ID, notificationBuilder.build());
+        remoteViews.setTextViewText(R.id.trackTitleText, this.trackTitle);
+        remoteViews.setTextViewText(R.id.artistText, this.artist);
+        notificationBuilder.setContent(remoteViews);
+        notificationManager.notify(NOTIFY_ME_ID, notificationBuilder.build());
+      });
     }
   }
 
