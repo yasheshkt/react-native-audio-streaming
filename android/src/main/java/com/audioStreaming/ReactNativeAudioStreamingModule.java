@@ -4,7 +4,9 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 
 import com.audioStreaming.AudioPlayerService;
@@ -33,6 +35,8 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   private Intent bindIntent;
   private String streamingURL;
   private boolean shouldShowNotification;
+
+  Handler mainThreadHandler = new Handler(Looper.getMainLooper());
 
   public ReactNativeAudioStreamingModule(ReactApplicationContext reactContext) {
     super(reactContext);
@@ -123,12 +127,16 @@ public class ReactNativeAudioStreamingModule extends ReactContextBaseJavaModule
   @ReactMethod public void stop() {
     //signal.stop();
     if (audioPlayerService == null) { return; }
-    audioPlayerService.stop();
+    mainThreadHandler.post(() -> audioPlayerService.stop());
   }
 
   @ReactMethod public void pause() {
     // Not implemented on aac
-    this.stop();
+    mainThreadHandler.post(() -> {
+      if (audioPlayerService.isPlaying()) {
+        audioPlayerService.stop();
+      }
+    });
   }
 
   @ReactMethod public void seekToTime(Double time) {
