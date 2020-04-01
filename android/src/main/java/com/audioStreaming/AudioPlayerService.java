@@ -5,8 +5,6 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -14,17 +12,19 @@ import android.content.IntentFilter;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
 import android.media.AudioManager;
-import android.media.session.MediaSession;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+
+import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.TaskStackBuilder;
-import androidx.media.session.MediaButtonReceiver;
 
 import android.os.Looper;
 import android.support.v4.media.session.MediaSessionCompat;
@@ -55,7 +55,7 @@ import java.io.InputStream;
  * Created by markus on 2017-08-28.
  */
 
-public class AudioPlayerService extends Service implements ExoPlayer.EventListener {
+public class AudioPlayerService extends Service implements ExoPlayer.EventListener, AudioManager.OnAudioFocusChangeListener {
   private static final String TAG = "AudioPlayerService";
 
   //Notifications
@@ -93,6 +93,101 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   private Bitmap coverImageBitmap;
 
   Handler mainThreadHandler = new Handler(Looper.getMainLooper());
+
+
+  // From React Native Track Player
+  @RequiresApi(26)
+  private AudioFocusRequest audioFocusRequest = null;
+  private boolean hasAudioFocus = false;
+  private boolean wasDucking = false;
+  private boolean resumeFocusOnNextGain = false;
+
+  private boolean alwaysPauseOnInterruption = true;
+
+  @Override
+  public void onAudioFocusChange(int focus) {
+    Log.d(TAG, "onAFChange " + focus + " " + resumeFocusOnNextGain);
+
+    switch(focus) {
+      case AudioManager.AUDIOFOCUS_LOSS:
+        abandonFocus();
+        stop();
+        break;
+      case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+        if (isPlaying()) {
+          togglePlayPause();
+          resumeFocusOnNextGain = true;
+        }
+        break;
+      case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+        if (alwaysPauseOnInterruption)
+          if (isPlaying()) {
+            togglePlayPause();
+          }
+        else {
+          // Lower volume here
+        }
+        break;
+        case AudioManager.AUDIOFOCUS_GAIN:
+          if (resumeFocusOnNextGain) {
+            play();
+            resumeFocusOnNextGain = false;
+            requestFocus();
+          }
+      default:
+        Log.i(TAG, "What here");
+        break;
+    }
+
+  }
+
+  private void requestFocus() {
+    if(hasAudioFocus) return;
+    Log.d(TAG, "Requesting audio focus...");
+
+    AudioManager manager = (AudioManager)context.getSystemService(Context.AUDIO_SERVICE);
+    int r;
+
+    if(manager == null) {
+      r = AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+    } else if(Build.VERSION.SDK_INT >= 26) {
+      audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+              .setOnAudioFocusChangeListener(this)
+              .setAudioAttributes(new AudioAttributes.Builder()
+                      .setUsage(AudioAttributes.USAGE_MEDIA)
+                      .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                      .build())
+              .setWillPauseWhenDucked(alwaysPauseOnInterruption)
+              .build();
+
+      r = manager.requestAudioFocus(audioFocusRequest);
+    } else {
+      //noinspection deprecation
+      r = manager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+    }
+
+    hasAudioFocus = r == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+  }
+
+  private void abandonFocus() {
+    if(!hasAudioFocus) return;
+    Log.d(TAG, "Abandoning audio focus...");
+
+    AudioManager manager = (AudioManager)context.getSystemService(Context.AUDIO_SERVICE);
+    int r;
+
+    if(manager == null) {
+      r = AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+    } else if(Build.VERSION.SDK_INT >= 26) {
+      r = manager.abandonAudioFocusRequest(audioFocusRequest);
+    } else {
+      //noinspection deprecation
+      r = manager.abandonAudioFocus(this);
+    }
+
+    hasAudioFocus = r != AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+  }
+  // End from React Native Track Player
 
   private class BecomingNoisyReceiver extends BroadcastReceiver {
     @Override
@@ -325,6 +420,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
     Log.i(TAG, "Play");
     // player.setPlayWhenReady(true);
     mainThreadHandler.post(() -> {
+      requestFocus();
       player.setPlayWhenReady(true);
       progressUpdater.run();
       showNotification();
@@ -356,6 +452,9 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
       updateNotificationViews();
       stopForeground(false);
       handler.removeCallbacks(progressUpdater);
+      if (!resumeFocusOnNextGain) {
+        abandonFocus();
+      }
     });
   }
 
