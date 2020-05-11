@@ -102,7 +102,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
   private boolean wasDucking = false;
   private boolean resumeFocusOnNextGain = false;
 
-  private boolean alwaysPauseOnInterruption = true;
+  private boolean alwaysPauseOnInterruption = false;
 
   @Override
   public void onAudioFocusChange(int focus) {
