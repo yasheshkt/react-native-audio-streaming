@@ -424,7 +424,7 @@ public class AudioPlayerService extends Service implements ExoPlayer.EventListen
       player.setPlayWhenReady(true);
       progressUpdater.run();
       // showNotification();
-      // updateNotificationViews();
+      updateNotificationViews();
       mMediaSession.setActive(true);
 
     });
